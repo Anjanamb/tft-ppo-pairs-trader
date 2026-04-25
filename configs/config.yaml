@@ -1,0 +1,252 @@
+# ============================================================
+# TFT + PPO Multi-Asset Pairs Trading System
+# Configuration — Single Source of Truth
+# ============================================================
+# References:
+#   - Han et al. (2023) "Select and Trade" arXiv:2301.10724
+#   - Peik et al. (2025) "Adaptive TFT for Crypto" arXiv:2509.10542
+#   - Lim et al. (2021) "Temporal Fusion Transformers" arXiv:1912.09363
+# ============================================================
+
+project:
+  name: "tft-ppo-pairs-trader"
+  version: "0.1.0"
+  description: "Multi-asset pairs trading with TFT spread prediction and PPO execution"
+
+# ----------------------------------------------------------
+# DATA SOURCES
+# Add a new asset = add one line here
+# ----------------------------------------------------------
+data:
+  storage: "duckdb"  # or "sqlite"
+  db_path: "data/market_data.duckdb"
+  cache_dir: "data/cache"
+  history_days: 1825  # 5 years of history
+
+  sources:
+    crypto:
+      provider: "binance"  # free, real-time, 24/7
+      tickers:
+        - "BTC/USDT"
+        - "ETH/USDT"
+        - "BNB/USDT"
+        - "SOL/USDT"
+        - "ADA/USDT"
+      interval: "1h"
+
+    etfs:
+      provider: "yfinance"
+      tickers:
+        - "SPY"   # S&P 500
+        - "QQQ"   # NASDAQ 100
+        - "XLF"   # Financials
+        - "XLE"   # Energy
+        - "XLK"   # Technology
+        - "GLD"   # Gold ETF
+        - "SLV"   # Silver ETF
+        - "TLT"   # 20+ Year Treasury
+      interval: "1d"
+
+    stocks:
+      provider: "yfinance"
+      tickers:
+        - "AAPL"
+        - "MSFT"
+        - "GOOGL"
+        - "AMZN"
+        - "NVDA"
+        - "JPM"
+        - "GS"
+        - "XOM"
+        - "CVX"
+      interval: "1d"
+
+    commodities:
+      provider: "yfinance"
+      tickers:
+        - "GC=F"   # Gold Futures
+        - "SI=F"   # Silver Futures
+        - "CL=F"   # Crude Oil
+        - "NG=F"   # Natural Gas
+      interval: "1d"
+
+    macro:
+      provider: "fred"
+      series:
+        - "DFF"      # Fed Funds Rate
+        - "T10Y2Y"   # 10Y-2Y Spread
+        - "VIXCLS"   # VIX
+      interval: "1d"
+
+# ----------------------------------------------------------
+# PAIR SELECTION
+# ----------------------------------------------------------
+pair_selection:
+  methods:
+    - "engle_granger"       # Cointegration test
+    - "johansen"            # Multi-variable cointegration
+    - "distance"            # Distance-based correlation
+  min_correlation: 0.7
+  max_half_life: 60         # days — reject slow mean-reversion
+  min_half_life: 5          # days — reject noise
+  lookback_window: 252      # 1 year rolling window
+  rebalance_frequency: "weekly"
+  cross_asset_pairs: true   # allow e.g. GLD vs BTC/USDT
+  max_pairs: 20             # top N pairs to track
+
+# ----------------------------------------------------------
+# TFT PREDICTOR
+# ----------------------------------------------------------
+tft:
+  # Architecture
+  hidden_size: 64
+  attention_head_size: 4
+  dropout: 0.1
+  hidden_continuous_size: 32
+  output_size: 7            # quantiles: [0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98]
+  
+  # Training
+  max_epochs: 100
+  learning_rate: 0.001
+  batch_size: 64
+  max_encoder_length: 60    # lookback window
+  max_prediction_length: 5  # forecast horizon (days)
+  early_stopping_patience: 10
+  
+  # Features
+  time_varying_known:
+    - "day_of_week"
+    - "month"
+    - "is_month_end"
+  time_varying_unknown:
+    - "spread"
+    - "spread_zscore"
+    - "spread_ma_ratio"
+    - "volatility_ratio"
+    - "volume_ratio"
+    - "rsi_spread"
+  static_categoricals:
+    - "pair_id"
+    - "asset_class"
+
+# ----------------------------------------------------------
+# PPO AGENT
+# ----------------------------------------------------------
+ppo:
+  algorithm: "PPO"          # swappable: PPO, SAC, A2C, TD3
+  policy: "MlpPolicy"
+  
+  # Hyperparameters (defaults — Optuna will tune these)
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  
+  # Environment
+  initial_balance: 100000
+  transaction_cost_pct: 0.001   # 10 bps
+  slippage_pct: 0.0005          # 5 bps
+  max_position_size: 0.2        # 20% of portfolio per pair
+  
+  # Training
+  total_timesteps: 500000
+  eval_frequency: 10000
+  n_eval_episodes: 10
+
+# ----------------------------------------------------------
+# HYPERPARAMETER TUNING (Optuna)
+# ----------------------------------------------------------
+tuning:
+  n_trials: 50
+  timeout_hours: 4
+  study_name: "tft_ppo_pairs"
+  storage: "sqlite:///data/optuna_studies.db"
+  pruner: "median"
+  sampler: "tpe"
+  
+  # Search spaces defined in src/tuning/search_space.py
+  metric: "sharpe_ratio"
+  direction: "maximize"
+
+# ----------------------------------------------------------
+# BACKTESTING
+# ----------------------------------------------------------
+backtest:
+  test_start: "2023-01-01"
+  test_end: "2025-12-31"
+  walk_forward:
+    train_window: 504       # 2 years
+    test_window: 63         # 3 months
+    step: 63                # roll forward 3 months
+  metrics:
+    - "sharpe_ratio"
+    - "sortino_ratio"
+    - "max_drawdown"
+    - "calmar_ratio"
+    - "win_rate"
+    - "profit_factor"
+    - "annualized_return"
+  benchmark: "SPY"
+
+# ----------------------------------------------------------
+# DASHBOARD
+# ----------------------------------------------------------
+dashboard:
+  framework: "streamlit"
+  port: 8501
+  refresh_interval: 300     # seconds
+  pages:
+    - "overview"
+    - "pair_monitor"
+    - "signals"
+    - "backtest_results"
+    - "model_performance"
+
+# ----------------------------------------------------------
+# ALERTS
+# ----------------------------------------------------------
+alerts:
+  enabled: false            # enable when ready
+  channels:
+    - type: "email"
+      recipient: ""
+    - type: "telegram"
+      bot_token: ""
+      chat_id: ""
+  triggers:
+    - "new_signal"
+    - "drawdown_exceeds_5pct"
+    - "pair_decointegration"
+
+# ----------------------------------------------------------
+# SCHEDULING (cron jobs — NOT Claude Code routines)
+# ----------------------------------------------------------
+schedule:
+  data_refresh:
+    cron: "0 */6 * * *"     # every 6 hours
+    script: "scripts/data_refresh.py"
+  
+  find_pairs:
+    cron: "0 2 * * 0"       # Sunday 2 AM
+    script: "scripts/find_pairs.py"
+  
+  backtest:
+    cron: "0 3 * * 0"       # Sunday 3 AM (after pair scan)
+    script: "scripts/run_backtest.py"
+
+# ----------------------------------------------------------
+# LOGGING
+# ----------------------------------------------------------
+logging:
+  level: "INFO"
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  file: "logs/trading.log"
+  mlflow:
+    tracking_uri: "mlruns"
+    experiment_name: "tft_ppo_pairs"

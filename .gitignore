@@ -1,0 +1,36 @@
+# Data
+data/*.duckdb
+data/*.db
+data/cache/
+*.csv
+
+# Models
+models/
+mlruns/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+
+# Documentation
+docs/
