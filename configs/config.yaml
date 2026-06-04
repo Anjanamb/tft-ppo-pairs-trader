@@ -115,8 +115,9 @@ tft:
   attention_head_size: 4
   dropout: 0.1
   hidden_continuous_size: 32
-  output_size: 7            # quantiles: [0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98]
-  
+  output_size: 7            # one output per quantile below
+  quantiles: [0.02, 0.1, 0.25, 0.5, 0.75, 0.9, 0.98]  # q_50 = point forecast
+
   # Training
   max_epochs: 100
   learning_rate: 0.001
@@ -124,6 +125,10 @@ tft:
   max_encoder_length: 60    # lookback window
   max_prediction_length: 5  # forecast horizon (days)
   early_stopping_patience: 10
+  gradient_clip_val: 0.1     # TFT is sensitive to exploding grads
+  seed: 42                   # reproducible weight init / shuffling
+  accelerator: "auto"        # "cpu" | "gpu" | "auto"
+  work_dir: "models"         # Lightning checkpoints/logs land here (gitignored)
   
   # Features
   time_varying_known:

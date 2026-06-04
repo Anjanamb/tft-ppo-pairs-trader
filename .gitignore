@@ -8,6 +8,10 @@ data/cache/
 /models/
 mlruns/
 
+# Training artifacts (Lightning)
+checkpoints/
+lightning_logs/
+
 # Logs
 logs/
 
