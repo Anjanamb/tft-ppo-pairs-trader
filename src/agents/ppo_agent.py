@@ -52,7 +52,8 @@ class TradingAgent:
             logger.info("%s ignores kwargs: %s", self.algo_name, dropped)
         return kwargs
 
-    def train(self, env, total_timesteps: int | None = None, seed: int | None = None):
+    def train(self, env, total_timesteps: int | None = None,
+              seed: int | None = None, callback=None):
         """Fit the policy on ``env``. Returns self for chaining."""
         algo_cls = self._algo_cls()
         kwargs = self._supported_kwargs(algo_cls)
@@ -70,7 +71,7 @@ class TradingAgent:
             "Training %s for %d timesteps (%s)",
             self.algo_name, steps, self.cfg["policy"],
         )
-        self.model.learn(total_timesteps=steps, progress_bar=False)
+        self.model.learn(total_timesteps=steps, callback=callback, progress_bar=False)
         return self
 
     def predict(self, obs, deterministic: bool = True):
