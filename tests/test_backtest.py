@@ -118,3 +118,36 @@ def test_walk_forward_regime_strategy_runs():
     result = bt.run(a, b, regime_zscore_strategy(window=15))
     assert result["n_folds"] >= 1
     assert len(result["returns"]) == result["n_folds"] * (10 - 1)
+
+
+def test_engine_threads_forecaster_through():
+    # A fake forecaster verifies the per-fold forecast plumbing + date alignment
+    # without the cost of training a TFT.
+    cfg = _small_config()
+    a, b = _cointegrated_closes(n=120)
+
+    def fake_forecaster(cfg_, ca, cb, beta, train_len):
+        sp = np.log(ca.to_numpy()) - beta * np.log(cb.to_numpy())
+        return pd.DataFrame(
+            {"prediction": sp + 0.01, "uncertainty": 0.1}, index=ca.index
+        )
+
+    bt = WalkForwardBacktester(cfg, warmup=5)
+    result = bt.run(a, b, zscore_strategy(), forecaster=fake_forecaster)
+    assert result["n_folds"] >= 1
+    assert len(result["returns"]) == result["n_folds"] * (10 - 1)
+
+
+def test_forecast_fold_returns_dated_forecasts():
+    pytest.importorskip("pytorch_forecasting")
+    from src.backtest.tft_fold import forecast_fold
+
+    a, b = _cointegrated_closes(n=200)
+    train_len = 140
+    beta = _hedge_ratio(a.to_numpy()[:train_len], b.to_numpy()[:train_len])
+    fc = forecast_fold(load_config(), a, b, beta, train_len, epochs=1)
+
+    assert not fc.empty
+    assert {"prediction", "uncertainty"} <= set(fc.columns)
+    # forecasts extend into the held-out test window (dates after train_len)
+    assert fc.index.max() >= a.index[train_len]

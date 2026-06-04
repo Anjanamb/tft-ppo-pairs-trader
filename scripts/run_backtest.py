@@ -62,7 +62,14 @@ def main():
                         default="both")
     parser.add_argument("--timesteps", type=int, default=30000,
                         help="PPO timesteps per fold")
+    parser.add_argument("--tft", action="store_true",
+                        help="feed PPO a TFT retrained per fold (look-ahead-free)")
+    parser.add_argument("--tft-epochs", type=int, default=20,
+                        help="TFT epochs per fold when --tft is set")
     args = parser.parse_args()
+
+    from src.utils.runtime import configure_quiet_runtime
+    configure_quiet_runtime()
 
     start = datetime.now()
     logger.info("=== Backtest started at %s ===", start)
@@ -93,8 +100,18 @@ def main():
     bench_ticker = cfg["backtest"]["benchmark"]
     bench_close = dm.get_prices([bench_ticker]).get(bench_ticker)
 
+    fold_forecaster = None
+    if args.tft:
+        from functools import partial
+
+        from src.backtest.tft_fold import forecast_fold
+        fold_forecaster = partial(forecast_fold, epochs=args.tft_epochs)
+        logger.info("Per-fold TFT enabled (%d epochs/fold) for PPO", args.tft_epochs)
+
     for label, strat in strategies.items():
-        result = bt.run(prices[ticker_a], prices[ticker_b], strat)
+        # Only PPO consumes the forecast; the z-score rules ignore it.
+        fc = fold_forecaster if label.startswith("PPO") else None
+        result = bt.run(prices[ticker_a], prices[ticker_b], strat, forecaster=fc)
         logger.info("%s: %d folds, %d OOS days",
                     label, result["n_folds"], len(result["returns"]))
         _log_metrics(f"{label} (out-of-sample, stitched)", result["metrics"])

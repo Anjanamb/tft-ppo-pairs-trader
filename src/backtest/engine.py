@@ -48,19 +48,27 @@ class WalkForwardBacktester:
         self.warmup = warmup
         self.scaling = self.cfg["ppo"]["reward_scaling"]
 
-    def run(self, close_a: pd.Series, close_b: pd.Series, strategy) -> dict:
+    def run(
+        self, close_a: pd.Series, close_b: pd.Series, strategy, forecaster=None
+    ) -> dict:
         """
         Args:
             close_a, close_b: aligned close-price series for the pair.
             strategy: ``fit(train_env, cfg) -> policy_fn``.
+            forecaster: optional ``(cfg, ca, cb, beta, train_len) -> DataFrame``
+                refit each fold to produce look-ahead-free spread forecasts
+                (datetime-indexed); they feed the test env's observation. If
+                ``None`` the agent sees a zero-edge naive forecast.
 
         Returns:
             Dict with the stitched OOS return series, dates, metrics, per-fold
             metrics, and fold count.
         """
         idx = close_a.index.intersection(close_b.index)
-        a = close_a.loc[idx].to_numpy()
-        b = close_b.loc[idx].to_numpy()
+        ca = close_a.loc[idx]
+        cb = close_b.loc[idx]
+        a = ca.to_numpy()
+        b = cb.to_numpy()
         dates = idx
 
         n = len(a)
@@ -80,11 +88,22 @@ class WalkForwardBacktester:
             test_lo = tr_end - self.warmup
             test_spread = np.log(a[test_lo:te_end]) - beta * np.log(b[test_lo:te_end])
 
+            forecast, uncertainty = None, None
+            if forecaster is not None:
+                fc = forecaster(
+                    self.cfg, ca.iloc[start:te_end], cb.iloc[start:te_end],
+                    beta, self.train_window,
+                )
+                forecast, uncertainty = self._align_forecast(
+                    fc, dates[test_lo:te_end], test_spread
+                )
+
             train_env = PairsTradingEnv(
                 train_spread, config=self.cfg, warmup=self.warmup
             )
             test_env = PairsTradingEnv(
-                test_spread, config=self.cfg, warmup=self.warmup
+                test_spread, forecast, uncertainty,
+                config=self.cfg, warmup=self.warmup,
             )
             policy = strategy(train_env, self.cfg)
             ep = run_episode(test_env, policy)
@@ -118,6 +137,26 @@ class WalkForwardBacktester:
             "per_fold": pd.DataFrame(per_fold),
             "n_folds": fold,
         }
+
+    @staticmethod
+    def _align_forecast(fc: pd.DataFrame, test_dates, test_spread):
+        """Map a datetime-indexed forecast onto the test window positions.
+
+        Missing dates (early window / no forecast) fall back to a zero-edge
+        naive forecast so the agent simply sees no signal there.
+        """
+        forecast = test_spread.copy()
+        uncertainty = np.zeros(len(test_spread))
+        if fc is None or fc.empty:
+            return forecast, uncertainty
+
+        pred = fc["prediction"].reindex(test_dates).to_numpy()
+        unc = fc["uncertainty"].reindex(test_dates).to_numpy()
+        have = ~np.isnan(pred)
+        forecast[have] = pred[have]
+        med = np.nanmedian(unc) if np.any(~np.isnan(unc)) else 0.0
+        unc[np.isnan(unc)] = med
+        return forecast, unc
 
 
 def benchmark_metrics(

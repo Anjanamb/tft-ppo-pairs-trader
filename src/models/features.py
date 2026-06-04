@@ -49,6 +49,7 @@ class SpreadFeatureEngineer:
         asset_class: str,
         volume_a: pd.Series | None = None,
         volume_b: pd.Series | None = None,
+        hedge_ratio: float | None = None,
     ) -> pd.DataFrame:
         """
         Build the feature panel for a single pair.
@@ -60,6 +61,9 @@ class SpreadFeatureEngineer:
             asset_class: Static categorical label for the pair, e.g. ``"crypto-etfs"``.
             volume_a: Optional volume for leg A. Volume ratio is 1.0 if omitted.
             volume_b: Optional volume for leg B.
+            hedge_ratio: Fixed hedge ratio for the spread. If omitted it is fit by
+                OLS over the whole sample; the walk-forward backtester passes a
+                train-window ratio here so the per-fold spread has no look-ahead.
 
         Returns:
             Long-format DataFrame with a contiguous integer ``time_idx`` plus
@@ -78,8 +82,11 @@ class SpreadFeatureEngineer:
         close_a, close_b = close_a.loc[idx], close_b.loc[idx]
 
         # Reuse the selector's hedge-ratio spread so features and pair scoring
-        # agree on what "the spread" is.
-        spread = PairSelector._compute_spread(close_a, close_b)
+        # agree on what "the spread" is (unless a fixed ratio is supplied).
+        if hedge_ratio is None:
+            spread = PairSelector._compute_spread(close_a, close_b)
+        else:
+            spread = np.log(close_a) - hedge_ratio * np.log(close_b)
 
         df = pd.DataFrame(index=idx)
         df["spread"] = spread
