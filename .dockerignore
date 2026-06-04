@@ -1,0 +1,27 @@
+# Generated data and artifacts (mounted as volumes at runtime)
+data/
+models/
+mlruns/
+logs/
+checkpoints/
+lightning_logs/
+*.duckdb
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+venv/
+.venv/
+
+# Repo / tooling
+.git/
+.github/
+notebooks/
+tests/
+docs/
+*.md
+.gitattributes

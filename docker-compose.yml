@@ -1,0 +1,33 @@
+# Dashboard + on-demand data jobs.
+#   docker compose up dashboard            # serve the dashboard on :8501
+#   docker compose run --rm data-refresh   # one-shot market data pull
+#   docker compose run --rm find-pairs      # re-scan cointegrated pairs
+services:
+  dashboard:
+    build: .
+    image: tft-ppo-pairs-trader
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  data-refresh:
+    image: tft-ppo-pairs-trader
+    build: .
+    command: python scripts/data_refresh.py
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    profiles: ["jobs"]
+
+  find-pairs:
+    image: tft-ppo-pairs-trader
+    build: .
+    command: python scripts/find_pairs.py
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    profiles: ["jobs"]

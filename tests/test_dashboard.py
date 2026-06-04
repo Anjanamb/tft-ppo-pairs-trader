@@ -1,7 +1,5 @@
 """Tests for the dashboard data layer and a headless app smoke run."""
 
-import numpy as np
-import pandas as pd
 import pytest
 
 from src.dashboard import data as D
@@ -45,6 +43,12 @@ def test_signals_table_has_valid_labels():
 # ----------------------------------------------------------------------
 def test_app_runs_without_exception():
     pytest.importorskip("streamlit")
+    from pathlib import Path
+
+    # The app reads the live DuckDB; skip on a fresh checkout / CI with no data.
+    if not Path("data/market_data.duckdb").exists() or D.latest_pairs_file() is None:
+        pytest.skip("no market data available")
+
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file("src/dashboard/app.py", default_timeout=60)

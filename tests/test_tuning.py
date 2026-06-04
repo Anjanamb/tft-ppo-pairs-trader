@@ -56,7 +56,7 @@ def _mean_reverting(n=160, seed=0):
 def test_ppo_study_runs_end_to_end():
     pytest.importorskip("optuna")
     pytest.importorskip("stable_baselines3")
-    from src.tuning.optimizer import make_ppo_objective, _build_study
+    from src.tuning.optimizer import make_ppo_objective
 
     cfg = copy.deepcopy(load_config())
     cfg["ppo"].update(reward_scaling=100.0)
