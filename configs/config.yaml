@@ -152,6 +152,7 @@ tft:
 ppo:
   algorithm: "PPO"          # swappable: PPO, SAC, A2C, TD3
   policy: "MlpPolicy"
+  device: "cpu"             # MLP policies train faster on CPU than GPU (SB3)
   
   # Hyperparameters (defaults — Optuna will tune these)
   learning_rate: 0.0003
@@ -167,9 +168,11 @@ ppo:
   
   # Environment
   initial_balance: 100000
-  transaction_cost_pct: 0.001   # 10 bps
+  transaction_cost_pct: 0.001   # 10 bps, charged per position change (round turn)
   slippage_pct: 0.0005          # 5 bps
   max_position_size: 0.2        # 20% of portfolio per pair
+  reward_scaling: 100.0         # gradient scale only — does not change optimum
+  drawdown_penalty: 0.0         # optional penalty on new equity drawdowns
   
   # Training
   total_timesteps: 500000

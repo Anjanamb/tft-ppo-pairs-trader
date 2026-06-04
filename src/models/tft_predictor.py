@@ -161,6 +161,30 @@ class TFTPredictor(BasePredictor):
         )
         return self._format_predictions(out.output, out.index)
 
+    def predict_per_step(self, panel: pd.DataFrame) -> pd.DataFrame:
+        """
+        1-step-ahead forecast at (almost) every timestep, for the trading env.
+
+        Unlike ``predict`` (which uses ``predict=True`` and returns only the last
+        window per series), this builds *all* sliding windows and keeps the
+        horizon-1 forecast, giving a rolling forecast aligned to ``time_idx``.
+
+        Returns:
+            DataFrame ``[pair_id, time_idx, prediction, uncertainty]`` where
+            uncertainty is the ``q_90 - q_10`` interval width.
+        """
+        if self._dataset_params is None:
+            raise RuntimeError("Train or load the model before forecasting.")
+        from pytorch_forecasting import TimeSeriesDataSet
+
+        dataset = TimeSeriesDataSet.from_parameters(
+            self._dataset_params, panel, predict=False, stop_randomization=True
+        )
+        out = self.predict(dataset)
+        out = out[out["horizon"] == 1].copy()
+        out["uncertainty"] = out["q_90"] - out["q_10"]
+        return out[["pair_id", "time_idx", "prediction", "uncertainty"]]
+
     def _as_dataset(self, data):
         """Coerce a DataFrame into a TimeSeriesDataSet using training encoders."""
         if isinstance(data, pd.DataFrame):
