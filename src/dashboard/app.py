@@ -58,15 +58,22 @@ def cached_backtest(a, b):
 
 
 _INTRO = """
-**What is this?** A research tool that hunts for pairs of assets whose prices
-historically move together (e.g. two bank stocks), then tries to profit when they
-temporarily drift apart and snap back. This is called **pairs trading** — a
-market-neutral strategy that bets on the *relationship* between two assets, not on
-the market going up or down.
+**Start with the basics — what is a "pair"?** A *pair* is **two assets that tend to
+move together** because they're economically linked — for example Coca-Cola &
+Pepsi, two big banks (JPMorgan & Goldman), or a gold ETF & gold futures. When two
+assets normally track each other, their prices stay in a fairly steady
+relationship.
+
+**What is pairs trading?** Sometimes that relationship temporarily stretches — one
+asset runs ahead of the other. Pairs trading bets that the gap will **snap back to
+normal**: you go long the cheaper one and short the pricier one, and profit when
+they re-converge. Crucially, it bets on the *relationship between the two*, not on
+the overall market going up or down (so it can make money in a flat or falling
+market). This app finds such pairs and studies how to trade them.
 
 **The jargon, in plain English:**
-- **Spread** — the gap between the two assets' prices. The strategy watches for the
-  gap to get unusually wide, betting it will narrow again.
+- **Spread** — the gap between the two assets' prices. The strategy watches for it
+  to get unusually wide, betting it will narrow again.
 - **Z-score** — how unusual today's spread is. Near 0 = normal; beyond ±2 = stretched.
 - **Cointegration / half-life** — statistical checks that the two assets *genuinely*
   track each other, and how fast the gap typically closes (in days).
@@ -255,10 +262,33 @@ PAGES = {
 }
 
 
+def _data_controls():
+    """Sidebar buttons to refresh data / rescan pairs without the CLI."""
+    st.sidebar.divider()
+    st.sidebar.subheader("Data controls")
+
+    if st.sidebar.button("🔄 Refresh market data", width="stretch"):
+        with st.spinner("Fetching latest bars from Binance / yfinance…"):
+            last = D.refresh_market_data()
+        st.cache_data.clear()  # invalidate cached prices/signals/backtests
+        st.sidebar.success(f"Data updated through {last}")
+        st.rerun()
+
+    if st.sidebar.button("🔁 Rescan pairs", width="stretch"):
+        with st.spinner("Scanning for cointegrated pairs…"):
+            n = D.rescan_pairs()
+        st.cache_data.clear()
+        st.sidebar.success(f"Found {n} pairs")
+        st.rerun()
+
+    st.sidebar.caption("Data is a snapshot from the last refresh — not a live feed.")
+
+
 def main():
     st.sidebar.title("TFT-PPO Pairs Trader")
     choice = st.sidebar.radio("Page", list(PAGES))
     st.sidebar.caption("Research dashboard — not investment advice.")
+    _data_controls()
     PAGES[choice]()
 
 

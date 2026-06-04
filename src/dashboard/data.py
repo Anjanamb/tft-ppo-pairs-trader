@@ -7,6 +7,7 @@ top of it.
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,8 @@ import pandas as pd
 from src.backtest.engine import WalkForwardBacktester, _hedge_ratio, benchmark_metrics
 from src.backtest.strategies import zscore_strategy
 from src.data.manager import DataManager
-from src.utils.config import load_config
+from src.pairs.selector import PairSelector
+from src.utils.config import get_all_tickers_flat, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -138,3 +140,41 @@ def zscore_backtest(
     result["benchmark_ticker"] = bench_ticker
     result["equity"] = np.cumsum(result["returns"])
     return result
+
+
+# ----------------------------------------------------------------------
+# Actions the dashboard can trigger (same work as the cron scripts)
+# ----------------------------------------------------------------------
+def refresh_market_data(cfg: dict | None = None) -> str:
+    """Fetch the latest bars for all configured tickers into DuckDB.
+
+    Mirrors scripts/data_refresh.py. Returns the new latest data date.
+    """
+    cfg = cfg or load_config()
+    dm = DataManager(cfg)
+    dm.init_db()
+    dm.refresh_all()
+    return coverage_summary(cfg)["last_date"]
+
+
+def rescan_pairs(cfg: dict | None = None) -> int:
+    """Re-run cointegration pair discovery and save a dated CSV.
+
+    Mirrors scripts/find_pairs.py. Returns the number of pairs found.
+    """
+    cfg = cfg or load_config()
+    dm = DataManager(cfg)
+    selector = PairSelector(cfg)
+
+    prices = dm.get_prices(get_all_tickers_flat())
+    if prices.empty:
+        return 0
+    min_obs = cfg["pair_selection"]["lookback_window"]
+    valid = prices.columns[prices.count() >= min_obs]
+    pairs_df = selector.find_pairs(prices[valid].dropna(how="all"))
+
+    if not pairs_df.empty:
+        out_dir = Path("data/pairs")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        pairs_df.to_csv(out_dir / f"pairs_{datetime.now():%Y%m%d}.csv", index=False)
+    return len(pairs_df)
