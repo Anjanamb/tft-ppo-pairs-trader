@@ -19,6 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.dashboard import data as D
 from src.utils.config import load_config
+from src.utils.runtime import configure_quiet_runtime
+
+configure_quiet_runtime()  # silence Lightning banners/warnings in the dashboard
 
 st.set_page_config(page_title="TFT-PPO Pairs Trader", layout="wide")
 
@@ -54,9 +57,36 @@ def cached_backtest(a, b):
     return D.zscore_backtest(a, b)
 
 
+_INTRO = """
+**What is this?** A research tool that hunts for pairs of assets whose prices
+historically move together (e.g. two bank stocks), then tries to profit when they
+temporarily drift apart and snap back. This is called **pairs trading** — a
+market-neutral strategy that bets on the *relationship* between two assets, not on
+the market going up or down.
+
+**The jargon, in plain English:**
+- **Spread** — the gap between the two assets' prices. The strategy watches for the
+  gap to get unusually wide, betting it will narrow again.
+- **Z-score** — how unusual today's spread is. Near 0 = normal; beyond ±2 = stretched.
+- **Cointegration / half-life** — statistical checks that the two assets *genuinely*
+  track each other, and how fast the gap typically closes (in days).
+- **Signal** — the system's *simulated* suggestion for a pair: **LONG** / **SHORT** the
+  spread, or **FLAT** (stay out). No real money or orders are involved.
+- **TFT** forecasts the spread a few days ahead with an uncertainty band; the **PPO**
+  agent is a reinforcement-learning trader that decides when to act.
+
+**Honest disclaimer:** this is a learning/portfolio project. Under rigorous
+out-of-sample testing the strategy does **not** beat simply holding the S&P 500.
+Nothing here is investment advice.
+"""
+
+
 # --- pages ---------------------------------------------------------------
 def page_overview():
     st.title("Pairs Trading System — Overview")
+    with st.expander("ℹ️  New here? Read this first (plain-English intro)", expanded=False):
+        st.markdown(_INTRO)
+
     pairs = cached_pairs()
     cov = cached_coverage()
 
