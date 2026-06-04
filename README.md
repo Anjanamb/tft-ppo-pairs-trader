@@ -2,6 +2,7 @@
 
 Multi-asset pairs trading with TFT spread prediction and PPO execution.
 
+[![CI](https://github.com/Anjanamb/tft-ppo-pairs-trader/actions/workflows/ci.yml/badge.svg)](https://github.com/Anjanamb/tft-ppo-pairs-trader/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-active%20development-yellow?style=flat-square)](#roadmap)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -10,7 +11,7 @@ Multi-asset pairs trading with TFT spread prediction and PPO execution.
 
 The idea: use a [Temporal Fusion Transformer](https://arxiv.org/abs/1912.09363) to forecast the spread between cointegrated asset pairs, then let a PPO agent decide when to enter/exit trades based on those forecasts + uncertainty estimates. Runs across crypto (Binance), US equities, ETFs, and commodities.
 
-> **Status:** Core infra (data pipeline, pair discovery, trading env) is done. Active work: TFT predictor, PPO training loop, walk-forward backtester. See [Roadmap](#roadmap) for the full list.
+> **Status:** End-to-end pipeline is built and CI-tested — data → pairs → TFT forecaster → PPO agent → Optuna tuning → walk-forward backtest → Streamlit dashboard, containerized with a GitHub Actions CI. The headline finding is deliberately unvarnished: **under a proper walk-forward the strategy does not beat a SPY buy-and-hold** (see [Results](#results)). Remaining: alerts/paper-trading and the modeling work to actually earn an edge. See [Roadmap](#roadmap).
 
 ## Why?
 
@@ -71,12 +72,40 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-# Pull 5 years of data for all configured tickers
+# 1. Pull 5 years of data for all configured tickers
 python scripts/data_refresh.py
 
-# Scan for cointegrated pairs
+# 2. Scan for cointegrated pairs
 python scripts/find_pairs.py
+
+# 3. Train the TFT spread forecaster (quantile outputs + variable importance)
+python scripts/train_tft.py --top 5 --interpret
+
+# 4. Train the PPO agent on the forecasts (chronological train/test split)
+python scripts/train_ppo.py --tft models/tft_<date>.ckpt
+
+# 5. Tune PPO against out-of-sample Sharpe (Optuna + MLflow + SQLite)
+python -m src.tuning.optimizer --target ppo --tft models/tft_<date>.ckpt --n-trials 50
+
+# 6. Walk-forward backtest vs a SPY benchmark (hedge ratio refit per fold)
+python scripts/run_backtest.py --strategy both
+
+# 7. Launch the dashboard
+streamlit run src/dashboard/app.py
 ```
+
+## Tests, CI & Docker
+
+```bash
+pytest                       # 35 tests; data-dependent ones skip without a DB
+ruff check src/ scripts/ tests/
+
+docker compose up dashboard           # serve the dashboard on :8501
+docker compose run --rm data-refresh  # one-shot data pull
+```
+
+GitHub Actions runs ruff + the full test suite on every push (CPU-only PyTorch;
+synthetic model/agent/backtest tests train tiny models for real).
 
 ## What's in the box
 
@@ -84,16 +113,18 @@ python scripts/find_pairs.py
 configs/config.yaml        <- all tickers, model params, schedules
 src/data/                  <- data sources (yfinance, ccxt) + DuckDB manager
 src/pairs/selector.py      <- cointegration tests, half-life, pair ranking
-src/models/                <- TFT predictor (base interface + implementation)
-src/agents/trading_env.py  <- Gymnasium env for the PPO agent
-src/backtest/              <- walk-forward backtesting
-src/dashboard/             <- Streamlit app
-scripts/                   <- cron jobs (data refresh, pair scan, backtest)
+src/models/                <- feature engineering, TFT dataset builder, TFT predictor
+src/agents/                <- Gymnasium env, SB3 agent wrapper, evaluation + baselines
+src/tuning/                <- Optuna search spaces + optimizer (OOS-Sharpe objective)
+src/backtest/              <- walk-forward engine, metrics, strategies
+src/dashboard/             <- Streamlit app (logic in data.py, UI in app.py)
+scripts/                   <- entry points (data refresh, pair scan, train, backtest)
+tests/                     <- pytest suite (synthetic data; runs in CI)
 ```
 
-## Initial results
+## Results
 
-First pair scan across 26 assets (325 combinations):
+**Pair discovery** — scan across 22 assets surfaced 12 cointegrated pairs, including cross-asset (crypto ↔ equity) and negatively correlated ones:
 
 ```
 BNB/USDT ↔ XLF     corr=0.888  coint_p=0.010  half_life=21.0d  score=0.892
@@ -103,7 +134,19 @@ JPM      ↔ SPY     corr=0.984  coint_p=0.021  half_life=28.5d  score=0.784
 AAPL     ↔ NVDA    corr=0.933  coint_p=0.008  half_life=39.8d  score=0.756
 ```
 
-12 valid pairs total, including cross-asset (crypto ↔ equity) and negatively correlated pairs.
+**TFT forecaster** — trains across all pairs at once with per-pair target normalization and 7-quantile output. Variable importance is sensible: the spread level (35%) and its z-score (16%) dominate, exactly what cointegration theory predicts; engineered volume/volatility ratios add little.
+
+**PPO agent vs baselines (single holdout, BNB/USDT ↔ XLF)** — PPO beat a z-score rule and random, the only policy positive out-of-sample (Sharpe 1.14 OOS vs 4.47 in-sample — the gap is the overfitting tax, shown rather than hidden).
+
+**The honest verdict — walk-forward (11 folds, 682 OOS days, hedge ratio refit each fold):**
+
+| Strategy                 | Ann. return | Sharpe | Max DD | Profit factor |
+|--------------------------|------------:|-------:|-------:|--------------:|
+| z-score rule             |       +0.21 |   0.41 |   0.55 |          1.10 |
+| PPO (retrained per fold) |       −0.26 |  −0.47 |   1.21 |          0.92 |
+| SPY buy-and-hold         |       +0.20 |   1.33 |   0.21 |          1.29 |
+
+Under rigorous, look-ahead-free evaluation the PPO agent **loses money**, the z-score rule barely breaks even, and **neither beats simply holding SPY**. The flattering single-holdout result did not survive — which is exactly what a walk-forward exists to expose. Closing that gap (per-fold TFT, better features/reward, regime filters) is the next phase of work, not a number to paper over.
 
 ## Data
 
@@ -120,14 +163,15 @@ Data refreshes via cron (`scripts/data_refresh.py`), pair scans run weekly (`scr
 - [x] DuckDB storage
 - [x] Cointegration-based pair discovery
 - [x] Gymnasium trading environment
-- [ ] Feature engineering + TFT dataset builder
-- [ ] TFT spread predictor with quantile outputs
-- [ ] PPO agent training
-- [ ] Optuna hyperparameter tuning
-- [ ] Walk-forward backtesting with realistic costs
-- [ ] Streamlit dashboard
+- [x] Feature engineering + TFT dataset builder
+- [x] TFT spread predictor with quantile outputs
+- [x] PPO agent training
+- [x] Optuna hyperparameter tuning
+- [x] Walk-forward backtesting with realistic costs
+- [x] Streamlit dashboard
+- [x] GitHub Actions CI + Docker deployment
 - [ ] Live paper trading + signal alerts
-- [ ] Docker deployment
+- [ ] Modeling improvements to earn an edge over SPY (per-fold TFT, reward/feature work)
 
 ## License
 
