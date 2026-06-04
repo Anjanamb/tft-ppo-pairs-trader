@@ -60,14 +60,20 @@ Needs Python 3.11 (pytorch-forecasting has issues on 3.13). If you're on conda:
 conda create -n pairs-trader python=3.11 -y
 conda activate pairs-trader
 
-# PyTorch first — pick your hardware
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121  # NVIDIA
-# or: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# PyTorch first. Only `torch` is needed (no torchvision/torchaudio).
+# CPU build runs the whole project and is the simplest path:
+pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-pip install pytorch-forecasting pytorch-lightning
-pip install stable-baselines3 gymnasium
+# For an NVIDIA GPU, pick the CUDA build matching your driver from
+# https://pytorch.org/get-started/locally/  (e.g. cu124). The project was
+# built and tested against torch 2.5–2.6.
+
+# Everything else (pytorch-forecasting, lightning, SB3, gymnasium, ...):
 pip install -r requirements.txt
 ```
+
+> If a `--index-url` install fails with `No matching distribution found`, it's
+> almost always a transient network/proxy hiccup — just retry the command.
 
 ## Usage
 
