@@ -106,3 +106,13 @@ def test_predict_before_train_raises():
 
     with pytest.raises(RuntimeError):
         TFTPredictor(_tiny_config()).predict(pd.DataFrame())
+
+
+def test_find_latest_checkpoint(tmp_path):
+    # No heavy deps needed — find_latest_checkpoint is a plain filesystem helper.
+    from src.models.tft_predictor import find_latest_checkpoint
+
+    assert find_latest_checkpoint(tmp_path) is None
+    (tmp_path / "tft_20260101.ckpt").touch()
+    (tmp_path / "tft_20260604.ckpt").touch()
+    assert find_latest_checkpoint(tmp_path).name == "tft_20260604.ckpt"

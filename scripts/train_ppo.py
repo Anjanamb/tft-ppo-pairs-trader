@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--pair", type=str, default=None,
                         help="pair_id to trade (default: top pair by score)")
     parser.add_argument("--tft", type=Path, default=None,
-                        help="TFT checkpoint for forecast features")
+                        help="TFT checkpoint (default: latest models/tft_*.ckpt)")
     parser.add_argument("--timesteps", type=int, default=None,
                         help="override ppo.total_timesteps")
     parser.add_argument("--algo", type=str, default=None,
@@ -108,7 +108,21 @@ def main():
         logger.error("Empty panel for %s", pair_id)
         sys.exit(1)
 
-    forecasts = _forecasts(args.tft, panel, cfg)
+    # Resolve the TFT checkpoint: explicit --tft, else the latest one on disk.
+    from src.models.tft_predictor import find_latest_checkpoint
+
+    tft_path = args.tft
+    if tft_path is None:
+        tft_path = find_latest_checkpoint()
+        if tft_path:
+            logger.info("Auto-selected latest TFT checkpoint: %s", tft_path)
+    elif not tft_path.exists():
+        logger.error("TFT checkpoint not found: %s "
+                     "(run scripts/train_tft.py, or omit --tft to auto-select)",
+                     tft_path)
+        sys.exit(1)
+
+    forecasts = _forecasts(tft_path, panel, cfg)
     spread, forecast, uncertainty = build_env_inputs(panel, forecasts)
 
     # Chronological train/test split. The agent only ever sees the train window;

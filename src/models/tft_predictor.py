@@ -31,6 +31,12 @@ from src.utils.config import load_config
 logger = logging.getLogger(__name__)
 
 
+def find_latest_checkpoint(models_dir: str | Path = "models") -> Path | None:
+    """Most recent ``tft_*.ckpt`` in ``models_dir`` (lexical order = by date)."""
+    ckpts = sorted(Path(models_dir).glob("tft_*.ckpt"))
+    return ckpts[-1] if ckpts else None
+
+
 class TFTPredictor(BasePredictor):
     """TFT spread forecaster with quantile (uncertainty) outputs."""
 

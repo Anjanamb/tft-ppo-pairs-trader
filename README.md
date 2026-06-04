@@ -87,11 +87,11 @@ python scripts/find_pairs.py
 # 3. Train the TFT spread forecaster (quantile outputs + variable importance)
 python scripts/train_tft.py --top 5 --interpret
 
-# 4. Train the PPO agent on the forecasts (chronological train/test split)
-python scripts/train_ppo.py --tft models/tft_<date>.ckpt
+# 4. Train the PPO agent on the forecasts (auto-uses the latest TFT checkpoint)
+python scripts/train_ppo.py
 
 # 5. Tune PPO against out-of-sample Sharpe (Optuna + MLflow + SQLite)
-python -m src.tuning.optimizer --target ppo --tft models/tft_<date>.ckpt --n-trials 50
+python -m src.tuning.optimizer --target ppo --n-trials 50
 
 # 6. Walk-forward backtest vs a SPY benchmark (hedge ratio refit per fold)
 python scripts/run_backtest.py --strategy both

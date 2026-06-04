@@ -207,7 +207,7 @@ def main():
     parser.add_argument("--target", choices=["ppo", "tft"], default="ppo")
     parser.add_argument("--pair", type=str, default=None)
     parser.add_argument("--tft", type=Path, default=None,
-                        help="TFT checkpoint for PPO forecast features")
+                        help="TFT checkpoint (default: latest models/tft_*.ckpt)")
     parser.add_argument("--n-trials", type=int, default=None)
     parser.add_argument("--timesteps", type=int, default=30000,
                         help="PPO timesteps per trial")
@@ -226,8 +226,19 @@ def main():
             logging.FileHandler("logs/optimizer.log", mode="a", encoding="utf-8"),
         ],
     )
+    tft_path = args.tft
+    if tft_path is None and args.target == "ppo":
+        from src.models.tft_predictor import find_latest_checkpoint
+
+        tft_path = find_latest_checkpoint()
+        if tft_path:
+            logger.info("Auto-selected latest TFT checkpoint: %s", tft_path)
+    elif tft_path is not None and not tft_path.exists():
+        logger.error("TFT checkpoint not found: %s", tft_path)
+        sys.exit(1)
+
     run_study(
-        target=args.target, pair=args.pair, tft_path=args.tft,
+        target=args.target, pair=args.pair, tft_path=tft_path,
         n_trials=args.n_trials, timesteps=args.timesteps, timeout=args.timeout,
         top=args.top, log_mlflow=not args.no_mlflow,
     )
