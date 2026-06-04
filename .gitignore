@@ -4,8 +4,8 @@ data/*.db
 data/cache/
 *.csv
 
-# Models
-models/
+# Models (trained weights — anchored so src/models/ source is still tracked)
+/models/
 mlruns/
 
 # Logs
