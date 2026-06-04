@@ -85,6 +85,48 @@ def zscore_policy(entry: float = 1.0, exit_band: float = 0.5):
     return policy
 
 
+def regime_zscore_policy(
+    entry: float = 1.0,
+    exit_band: float = 0.5,
+    window: int = 40,
+    max_half_life: float = 60.0,
+):
+    """
+    Z-score rule with a regime gate: only take a position while the spread is
+    *currently* mean-reverting.
+
+    A rolling OU half-life is estimated on the last ``window`` spreads the policy
+    has seen; if the spread is not mean-reverting (no finite half-life) or reverts
+    too slowly (> ``max_half_life`` days), the relationship has likely broken down
+    and the policy stays flat instead of fading a runaway divergence.
+
+    Stateful: it buffers the spreads streamed through ``obs[0]``, so a fresh
+    policy must be created per backtest fold (the strategy factory does this).
+    """
+    from src.pairs.selector import PairSelector
+
+    buffer: list[float] = []
+
+    def policy(obs) -> int:
+        buffer.append(float(obs[0]))     # spread level
+        if len(buffer) > window:
+            buffer.pop(0)
+        z = float(obs[1])
+
+        base = 2 if z > entry else 1 if z < -entry else 0
+        if base == 0:
+            return 0
+
+        # Regime gate — needs enough history to estimate a half-life.
+        if len(buffer) >= 20:
+            hl = PairSelector._compute_half_life(pd.Series(buffer))
+            if hl is None or hl > max_half_life:
+                return 0  # not mean-reverting now -> stand aside
+        return base
+
+    return policy
+
+
 def build_env_inputs(
     pair_panel: pd.DataFrame, forecasts: pd.DataFrame | None = None
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

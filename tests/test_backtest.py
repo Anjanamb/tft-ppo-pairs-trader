@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.agents.evaluation import regime_zscore_policy
 from src.backtest import metrics as M
 from src.backtest.engine import WalkForwardBacktester, _hedge_ratio
-from src.backtest.strategies import zscore_strategy
+from src.backtest.strategies import regime_zscore_strategy, zscore_strategy
 from src.utils.config import load_config
 
 
@@ -85,3 +86,35 @@ def test_walk_forward_only_scores_test_windows():
     assert not result["per_fold"].empty
     # per-fold betas should vary as the window rolls (genuine re-estimation)
     assert result["per_fold"]["beta"].nunique() > 1
+
+
+def _obs(spread, z):
+    o = np.zeros(9)
+    o[0], o[1] = spread, z
+    return o
+
+
+def test_regime_gate_blocks_non_mean_reverting():
+    pol = regime_zscore_policy(entry=1.0, window=30, max_half_life=60)
+    # a monotonic trend is NOT mean-reverting; an extreme z would say "short"
+    actions = [pol(_obs(float(i), 3.0)) for i in range(40)]
+    assert actions[-1] == 0  # gated to flat despite the extreme z-score
+
+
+def test_regime_gate_allows_mean_reverting():
+    pol = regime_zscore_policy(entry=1.0, window=40, max_half_life=60)
+    rng = np.random.default_rng(0)
+    x, actions = 0.0, []
+    for _ in range(60):
+        x = 0.7 * x + rng.normal(0, 0.1)  # fast mean reversion (half-life ~2d)
+        actions.append(pol(_obs(x, 2.0)))
+    assert actions[-1] == 2  # regime is healthy -> the short signal goes through
+
+
+def test_walk_forward_regime_strategy_runs():
+    cfg = _small_config()
+    a, b = _cointegrated_closes()
+    bt = WalkForwardBacktester(cfg, warmup=5)
+    result = bt.run(a, b, regime_zscore_strategy(window=15))
+    assert result["n_folds"] >= 1
+    assert len(result["returns"]) == result["n_folds"] * (10 - 1)

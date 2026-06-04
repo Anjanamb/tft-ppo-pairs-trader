@@ -24,7 +24,11 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.backtest.engine import WalkForwardBacktester, benchmark_metrics
-from src.backtest.strategies import ppo_strategy, zscore_strategy
+from src.backtest.strategies import (
+    ppo_strategy,
+    regime_zscore_strategy,
+    zscore_strategy,
+)
 from src.data.manager import DataManager
 from src.utils.config import load_config
 
@@ -82,6 +86,7 @@ def main():
     strategies = {}
     if args.strategy in ("zscore", "both"):
         strategies["z-score rule"] = zscore_strategy()
+        strategies["z-score + regime"] = regime_zscore_strategy()
     if args.strategy in ("ppo", "both"):
         strategies["PPO (refit/fold)"] = ppo_strategy(timesteps=args.timesteps)
 

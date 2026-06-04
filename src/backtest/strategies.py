@@ -9,7 +9,7 @@ then rolled through the held-out test window.
 
 import logging
 
-from src.agents.evaluation import zscore_policy
+from src.agents.evaluation import regime_zscore_policy, zscore_policy
 from src.agents.ppo_agent import TradingAgent
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,18 @@ def zscore_strategy(entry: float = 1.0, exit_band: float = 0.5):
 
     def fit(train_env, cfg):
         return zscore_policy(entry, exit_band)
+
+    return fit
+
+
+def regime_zscore_strategy(
+    entry: float = 1.0, exit_band: float = 0.5, window: int = 40
+):
+    """Z-score rule gated to only trade while the spread is mean-reverting."""
+
+    def fit(train_env, cfg):
+        max_hl = cfg["pair_selection"]["max_half_life"]
+        return regime_zscore_policy(entry, exit_band, window, max_hl)
 
     return fit
 
