@@ -268,5 +268,5 @@ logging:
   format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
   file: "logs/trading.log"
   mlflow:
-    tracking_uri: "mlruns"
+    tracking_uri: "sqlite:///data/mlflow.db"  # file store is deprecated in mlflow 3.x
     experiment_name: "tft_ppo_pairs"

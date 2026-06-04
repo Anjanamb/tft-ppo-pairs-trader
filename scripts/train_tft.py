@@ -63,6 +63,9 @@ def main():
                         help="log variable importances after training")
     args = parser.parse_args()
 
+    from src.utils.runtime import configure_quiet_runtime
+    configure_quiet_runtime()
+
     start = datetime.now()
     logger.info("=== TFT training started at %s ===", start)
 

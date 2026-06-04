@@ -183,7 +183,11 @@ def run_study(target="ppo", pair=None, tft_path=None, n_trials=None,
     logger.info("Best params: %s", study.best_params)
     _save_best_params(study, target)
     if log_mlflow:
-        _log_trials_to_mlflow(study, cfg, target)
+        # Logging is a nice-to-have — never let it discard a finished study.
+        try:
+            _log_trials_to_mlflow(study, cfg, target)
+        except Exception as exc:
+            logger.warning("MLflow logging skipped (%s)", exc)
     return study
 
 
@@ -226,6 +230,9 @@ def main():
             logging.FileHandler("logs/optimizer.log", mode="a", encoding="utf-8"),
         ],
     )
+    from src.utils.runtime import configure_quiet_runtime
+    configure_quiet_runtime()
+
     tft_path = args.tft
     if tft_path is None and args.target == "ppo":
         from src.models.tft_predictor import find_latest_checkpoint

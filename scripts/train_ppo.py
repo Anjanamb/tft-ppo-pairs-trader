@@ -84,6 +84,9 @@ def main():
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
+    from src.utils.runtime import configure_quiet_runtime
+    configure_quiet_runtime()
+
     start = datetime.now()
     logger.info("=== PPO training started at %s ===", start)
 
