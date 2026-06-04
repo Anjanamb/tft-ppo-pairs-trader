@@ -95,6 +95,18 @@ pair_selection:
   max_pairs: 20             # top N pairs to track
 
 # ----------------------------------------------------------
+# FEATURE ENGINEERING
+# Windows used by src/models/features.py
+# ----------------------------------------------------------
+features:
+  zscore_window: 20         # rolling window for spread z-score
+  ma_fast: 5                # fast moving average (spread MA ratio)
+  ma_slow: 20               # slow moving average (spread MA ratio)
+  volatility_window: 20     # rolling window for return volatility
+  rsi_window: 14            # RSI window on the spread
+  val_fraction: 0.2         # tail fraction of each pair held out for validation
+
+# ----------------------------------------------------------
 # TFT PREDICTOR
 # ----------------------------------------------------------
 tft:

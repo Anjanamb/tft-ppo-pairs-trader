@@ -50,3 +50,11 @@ def get_all_tickers_flat() -> list[str]:
     """Get a flat list of all tradeable tickers."""
     groups = get_tickers()
     return [t for tickers in groups.values() for t in tickers]
+
+
+def get_asset_class(ticker: str) -> str:
+    """Return the asset class a ticker belongs to, or 'unknown' if unmapped."""
+    for cls_name, tickers in get_tickers().items():
+        if ticker in tickers:
+            return cls_name
+    return "unknown"
