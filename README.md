@@ -3,7 +3,7 @@
 Multi-asset pairs trading with TFT spread prediction and PPO execution.
 
 [![CI](https://github.com/Anjanamb/tft-ppo-pairs-trader/actions/workflows/ci.yml/badge.svg)](https://github.com/Anjanamb/tft-ppo-pairs-trader/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-active%20development-yellow?style=flat-square)](#roadmap)
+[![Status](https://img.shields.io/badge/status-research%20concluded-blue?style=flat-square)](#roadmap)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
@@ -11,7 +11,7 @@ Multi-asset pairs trading with TFT spread prediction and PPO execution.
 
 The idea: use a [Temporal Fusion Transformer](https://arxiv.org/abs/1912.09363) to forecast the spread between cointegrated asset pairs, then let a PPO agent decide when to enter/exit trades based on those forecasts + uncertainty estimates. Runs across crypto (Binance), US equities, ETFs, and commodities.
 
-> **Status:** End-to-end pipeline is built and CI-tested — data → pairs → TFT forecaster → PPO agent → Optuna tuning → walk-forward backtest → Streamlit dashboard, containerized with a GitHub Actions CI. The headline finding is deliberately unvarnished: **under a proper walk-forward the strategy does not beat a SPY buy-and-hold** (see [Results](#results)). Remaining: alerts/paper-trading and the modeling work to actually earn an edge. See [Roadmap](#roadmap).
+> **Status: research concluded (paused).** The full pipeline is built and CI-tested — data → pairs → TFT forecaster → PPO agent → Optuna tuning → walk-forward backtest → Streamlit dashboard, containerized with GitHub Actions CI. The investigation reached a clear, unvarnished conclusion: **under fully look-ahead-free walk-forward evaluation the strategy does not beat a SPY buy-and-hold** — and successive attempts to find an edge (regime filtering, a per-fold-retrained TFT) confirmed it (see [Results](#results)). The deliverable is a rigorous pipeline that evaluates honestly enough to reject its own hypothesis, rather than a fragile backtest Sharpe. See [Roadmap](#roadmap).
 
 ## Why?
 
@@ -182,8 +182,9 @@ Data refreshes via cron (`scripts/data_refresh.py`), pair scans run weekly (`scr
 - [x] Walk-forward backtesting with realistic costs
 - [x] Streamlit dashboard
 - [x] GitHub Actions CI + Docker deployment
-- [ ] Live paper trading + signal alerts
-- [ ] Modeling improvements to earn an edge over SPY (per-fold TFT, reward/feature work)
+- [x] Edge-hunting experiments: regime filter + per-fold TFT — both showed no out-of-sample edge (conclusion above)
+- [ ] *(not pursued — paused)* Live paper trading + signal alerts
+- [ ] *(not pursued — paused)* Further modeling (reward shaping, richer features); unlikely to overturn the verdict on daily data
 
 ## License
 
