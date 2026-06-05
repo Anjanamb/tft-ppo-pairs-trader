@@ -94,7 +94,8 @@ python scripts/train_ppo.py
 python -m src.tuning.optimizer --target ppo --n-trials 50
 
 # 6. Walk-forward backtest vs a SPY benchmark (hedge ratio refit per fold)
-python scripts/run_backtest.py --strategy both
+python scripts/run_backtest.py --strategy both        # rule + PPO baselines
+python scripts/run_backtest.py --strategy ppo --tft   # PPO on a per-fold TFT
 
 # 7. Launch the dashboard
 streamlit run src/dashboard/app.py
@@ -144,15 +145,20 @@ AAPL     ↔ NVDA    corr=0.933  coint_p=0.008  half_life=39.8d  score=0.756
 
 **PPO agent vs baselines (single holdout, BNB/USDT ↔ XLF)** — PPO beat a z-score rule and random, the only policy positive out-of-sample (Sharpe 1.14 OOS vs 4.47 in-sample — the gap is the overfitting tax, shown rather than hidden).
 
-**The honest verdict — walk-forward (11 folds, 682 OOS days, hedge ratio refit each fold):**
+**The honest verdict — walk-forward (12 folds, 744 OOS days, fully look-ahead-free):**
 
-| Strategy                 | Ann. return | Sharpe | Max DD | Profit factor |
-|--------------------------|------------:|-------:|-------:|--------------:|
-| z-score rule             |       +0.21 |   0.41 |   0.55 |          1.10 |
-| PPO (retrained per fold) |       −0.26 |  −0.47 |   1.21 |          0.92 |
-| SPY buy-and-hold         |       +0.20 |   1.33 |   0.21 |          1.29 |
+Every strategy is refit per fold, the hedge ratio is re-estimated per fold, and the TFT is retrained per fold on train-only data — so nothing below has seen its own evaluation window.
 
-Under rigorous, look-ahead-free evaluation the PPO agent **loses money**, the z-score rule barely breaks even, and **neither beats simply holding SPY**. The flattering single-holdout result did not survive — which is exactly what a walk-forward exists to expose. Closing that gap (per-fold TFT, better features/reward, regime filters) is the next phase of work, not a number to paper over.
+| Strategy                     | Ann. return | Sharpe | Max DD | Profit factor |
+|------------------------------|------------:|-------:|-------:|--------------:|
+| z-score rule                 |       +0.11 |   0.21 |   0.61 |          1.05 |
+| z-score + regime filter      |       +0.08 |   0.18 |   0.62 |          1.04 |
+| PPO + per-fold TFT forecasts |       −0.30 |  −0.56 |   1.23 |          0.90 |
+| SPY buy-and-hold (benchmark) |       +0.20 |   1.32 |   0.21 |          1.28 |
+
+Under rigorous evaluation the result is unambiguous: the z-score rule barely breaks even, a mean-reversion **regime filter does not help**, and the **PPO agent — even fed genuinely look-ahead-free TFT forecasts retrained every fold — loses money** and gets nowhere near just holding SPY. The flattering single-holdout result (Sharpe 1.14) did not survive, and successive attempts to rescue it (regime gating, per-fold TFT) confirmed there is no tradeable edge here.
+
+That *is* the finding. The engineering value of this project is a complete, CI-tested pipeline that **evaluates honestly enough to kill its own false positives** — the opposite of a backtest that quietly leaks the future to manufacture a Sharpe.
 
 ## Data
 
